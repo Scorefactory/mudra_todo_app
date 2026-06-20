@@ -769,6 +769,21 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         e.Handled = true;
     }
 
+    private void SubTodoCheckBox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not CheckBox { DataContext: TodoItem subTodo })
+        {
+            return;
+        }
+
+        ClearSubTodoDragState();
+        subTodo.IsCompleted = !subTodo.IsCompleted;
+        ScheduleSave();
+        UpdateCount();
+        RefreshFilter();
+        e.Handled = true;
+    }
+
     private void ScheduleNextRecurringTodo(TodoItem completedTodo)
     {
         if (!Todos.Contains(completedTodo) ||
@@ -942,7 +957,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         var schedule = GetCurrentOrNextSchedule(todo, today);
         if (schedule.ActivationDate.Date <= today)
         {
-            ActivateRecurringTodo(todo, schedule.ActivationDate, schedule.DueDate);
+            EnsureRecurringTodoActive(todo, schedule.DueDate);
             return;
         }
 
@@ -950,6 +965,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         todo.CompletedAt = null;
         todo.DueDate = null;
         todo.NextActivationDate = schedule.ActivationDate;
+    }
+
+    private static void EnsureRecurringTodoActive(TodoItem todo, DateTimeOffset dueDate)
+    {
+        todo.IsCompleted = false;
+        todo.CompletedAt = null;
+        todo.DueDate = dueDate;
+        todo.NextActivationDate = null;
     }
 
     private static DateTimeOffset GetDueDateForActivation(TodoItem todo, DateTime activationDate)
@@ -2628,6 +2651,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         if (IsInteractiveElement((DependencyObject)e.OriginalSource))
         {
+            ClearTodoDragState();
             return;
         }
 
@@ -2703,6 +2727,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         if (IsInteractiveElement((DependencyObject)e.OriginalSource))
         {
+            ClearSubTodoDragState();
             return;
         }
 
@@ -2710,6 +2735,19 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _draggedSubParent = (sender as FrameworkElement)?.DataContext as TodoItem;
         _draggedSubContainer = FindAncestor<ContentPresenter>((DependencyObject)e.OriginalSource);
         _draggedSubTodo = _draggedSubContainer?.Content as TodoItem;
+    }
+
+    private void ClearTodoDragState()
+    {
+        _draggedContainer = null;
+        _draggedTodo = null;
+    }
+
+    private void ClearSubTodoDragState()
+    {
+        _draggedSubContainer = null;
+        _draggedSubTodo = null;
+        _draggedSubParent = null;
     }
 
     private void SubTodoList_MouseMove(object sender, MouseEventArgs e)
