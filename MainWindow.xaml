@@ -1032,14 +1032,14 @@
                                             </Style.Triggers>
                                         </Style>
                                     </StackPanel.Style>
-                                    <Button Content="蹂듦뎄"
+                                    <Button Content="복구"
                                             Tag="{Binding}"
                                             Click="RestoreMemo_Click"
                                             Foreground="{DynamicResource AccentBrush}"
                                             Padding="0"
                                             Margin="0,0,14,0"
                                             Style="{StaticResource ShellButtonStyle}" />
-                                    <Button Content="??젣"
+                                    <Button Content="삭제"
                                             Tag="{Binding}"
                                             Click="DeleteMemoPermanently_Click"
                                             Foreground="{DynamicResource DangerBrush}"

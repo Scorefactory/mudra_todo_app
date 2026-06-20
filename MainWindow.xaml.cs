@@ -2555,6 +2555,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
+        DisableStickyNote(memo);
         memo.IsDeleted = true;
         memo.IsEditingTitle = false;
         ScheduleSave();
@@ -2570,10 +2571,23 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
 
         memo.IsDeleted = false;
+        memo.IsStickyNoteEnabled = true;
         _showMemoTrash = false;
+        ShowStickyNote(memo, focusEditor: false);
         ScheduleSave();
         UpdateCount();
         RefreshFilter();
+    }
+
+    private void DisableStickyNote(TodoItem memo)
+    {
+        memo.IsStickyNoteEnabled = false;
+        memo.IsStickyNoteOpen = false;
+
+        if (_stickyNotes.TryGetValue(memo.Id, out var stickyWindow))
+        {
+            stickyWindow.Close();
+        }
     }
 
     private void DeleteMemoPermanently_Click(object sender, RoutedEventArgs e)
