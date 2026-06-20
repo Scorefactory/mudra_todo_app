@@ -2572,7 +2572,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         memo.IsDeleted = false;
         memo.IsStickyNoteEnabled = true;
-        _showMemoTrash = false;
         ShowStickyNote(memo, focusEditor: false);
         ScheduleSave();
         UpdateCount();
