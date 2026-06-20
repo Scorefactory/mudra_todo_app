@@ -174,6 +174,45 @@
             </Setter>
         </Style>
 
+        <Style x:Key="SwitchCheckBoxStyle" TargetType="CheckBox">
+            <Setter Property="Width" Value="42" />
+            <Setter Property="Height" Value="24" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <Grid Width="42"
+                              Height="24"
+                              Background="Transparent">
+                            <Border x:Name="Track"
+                                    Background="{DynamicResource PanelSoftBrush}"
+                                    BorderBrush="{DynamicResource LineBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="12" />
+                            <Ellipse x:Name="Thumb"
+                                     Width="18"
+                                     Height="18"
+                                     Margin="3"
+                                     Fill="{DynamicResource TextMutedBrush}"
+                                     HorizontalAlignment="Left" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Track" Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter TargetName="Track" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                <Setter TargetName="Thumb" Property="Fill" Value="White" />
+                                <Setter TargetName="Thumb" Property="HorizontalAlignment" Value="Right" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Track" Property="BorderBrush" Value="#94A3B8" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style TargetType="ScrollBar">
             <Setter Property="Width" Value="3" />
             <Setter Property="MinWidth" Value="0" />
@@ -282,6 +321,7 @@
             <Border x:Name="SettingsPanel"
                     Margin="0,10,0,0"
                     Padding="12"
+                    MinWidth="310"
                     Background="{DynamicResource PanelBrush}"
                     BorderBrush="{DynamicResource LineBrush}"
                     BorderThickness="1"
@@ -303,9 +343,10 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="76" />
+                        <ColumnDefinition Width="Auto" MinWidth="96" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
 
@@ -476,6 +517,23 @@
                     </DockPanel>
 
                     <TextBlock Grid.Row="8"
+                               Grid.Column="0"
+                               Text="새 메모 스티키"
+                               Foreground="{DynamicResource TextMutedBrush}"
+                               FontSize="12"
+                               Margin="0,8,0,0"
+                               VerticalAlignment="Center" />
+                    <CheckBox x:Name="AutoStickyNewMemoToggle"
+                              Grid.Row="8"
+                              Grid.Column="1"
+                              IsChecked="True"
+                              Checked="AutoStickyNewMemoToggle_Changed"
+                              Unchecked="AutoStickyNewMemoToggle_Changed"
+                              Margin="0,8,0,0"
+                              Style="{StaticResource SwitchCheckBoxStyle}"
+                              VerticalAlignment="Center" />
+
+                    <TextBlock Grid.Row="9"
                                Grid.ColumnSpan="2"
                                Text="스티키노트"
                                Foreground="{DynamicResource TextBrush}"
@@ -483,14 +541,14 @@
                                FontWeight="SemiBold"
                                Margin="0,14,0,2" />
 
-                    <TextBlock Grid.Row="9"
+                    <TextBlock Grid.Row="10"
                                Grid.Column="0"
                                Text="스티키 폰트"
                                Foreground="{DynamicResource TextMutedBrush}"
                                FontSize="12"
                                Margin="0,8,0,0"
                                VerticalAlignment="Center" />
-                    <DockPanel Grid.Row="9"
+                    <DockPanel Grid.Row="10"
                                Grid.Column="1"
                                Margin="0,8,0,0">
                         <TextBlock x:Name="StickyNoteFontSizeValueText"
@@ -510,7 +568,7 @@
                                 ValueChanged="StickyNoteFontSizeSlider_ValueChanged" />
                     </DockPanel>
 
-                    <TextBlock Grid.Row="10"
+                    <TextBlock Grid.Row="11"
                                Grid.Column="0"
                                Text="스티키 항상 위"
                                Foreground="{DynamicResource TextMutedBrush}"
@@ -518,17 +576,16 @@
                                Margin="0,8,0,0"
                                VerticalAlignment="Center" />
                     <CheckBox x:Name="StickyNoteTopmostToggle"
-                              Grid.Row="10"
+                              Grid.Row="11"
                               Grid.Column="1"
-                              Content="켜짐"
                               IsChecked="True"
                               Checked="StickyNoteTopmostToggle_Changed"
                               Unchecked="StickyNoteTopmostToggle_Changed"
-                              Foreground="{DynamicResource TextMutedBrush}"
                               Margin="0,8,0,0"
+                              Style="{StaticResource SwitchCheckBoxStyle}"
                               VerticalAlignment="Center" />
 
-                    <TextBlock Grid.Row="11"
+                    <TextBlock Grid.Row="12"
                                Grid.Column="0"
                                Text="스티키 정렬"
                                Foreground="{DynamicResource TextMutedBrush}"
@@ -536,7 +593,7 @@
                                Margin="0,8,0,0"
                                VerticalAlignment="Center" />
                     <ComboBox x:Name="StickyArrangeDirectionCombo"
-                              Grid.Row="11"
+                              Grid.Row="12"
                               Grid.Column="1"
                               Height="28"
                               Margin="0,8,0,0"
@@ -545,7 +602,7 @@
                         <ComboBoxItem Content="세로" Tag="Vertical" IsSelected="True" />
                     </ComboBox>
 
-                    <Button Grid.Row="12"
+                    <Button Grid.Row="13"
                             Grid.Column="1"
                             Content="설정 리셋"
                             Click="SettingsReset_Click"
@@ -555,7 +612,7 @@
                             Margin="0,10,0,0"
                             Style="{StaticResource ShellButtonStyle}" />
 
-                    <StackPanel Grid.Row="13"
+                    <StackPanel Grid.Row="14"
                                 Grid.ColumnSpan="2"
                                 HorizontalAlignment="Center"
                                 Margin="0,18,0,0">
@@ -783,9 +840,8 @@
                                     </Grid.ColumnDefinitions>
 
                                     <CheckBox Grid.Column="0"
-                                              IsChecked="{Binding IsCompleted, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                              Checked="TodoChanged_Click"
-                                              Unchecked="TodoChanged_Click"
+                                              IsChecked="{Binding IsCompleted, Mode=OneWay}"
+                                              Click="TodoChanged_Click"
                                               Visibility="{Binding IsMemo, Converter={StaticResource InverseBoolToVisibilityConverter}}"
                                               Margin="0,6,0,0"
                                               VerticalAlignment="Top" />
@@ -1003,7 +1059,7 @@
                                                  Background="Transparent"
                                                  KeyDown="SubTodoBox_KeyDown"
                                                  LostKeyboardFocus="SubTodoBox_LostKeyboardFocus"
-                                                 ToolTip="?섏쐞 ???쇱쓣 ?낅젰?섍퀬 Enter瑜??꾨Ⅴ?몄슂"
+                                                 ToolTip="하위 할 일을 입력하고 Enter를 누르세요"
                                                  VerticalContentAlignment="Center" />
 
                                         <Button Grid.Column="1"
@@ -1016,16 +1072,16 @@
                                                 FontSize="12">
                                             <Button.Style>
                                                 <Style TargetType="Button" BasedOn="{StaticResource ShellButtonStyle}">
-                                                    <Setter Property="Content" Value="異붽?" />
+                                                    <Setter Property="Content" Value="추가" />
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding SubTaskDraft}" Value="">
-                                                            <Setter Property="Content" Value="痍⑥냼" />
+                                                            <Setter Property="Content" Value="취소" />
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding SubTaskDraft.Length}" Value="0">
-                                                            <Setter Property="Content" Value="痍⑥냼" />
+                                                            <Setter Property="Content" Value="취소" />
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding SubTaskDraft}" Value="{x:Null}">
-                                                            <Setter Property="Content" Value="痍⑥냼" />
+                                                            <Setter Property="Content" Value="취소" />
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
@@ -1067,9 +1123,8 @@
                                                         </Grid.ColumnDefinitions>
 
                                                         <CheckBox Grid.Column="0"
-                                                                  IsChecked="{Binding IsCompleted, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                                  Checked="TodoChanged_Click"
-                                                                  Unchecked="TodoChanged_Click"
+                                                                  IsChecked="{Binding IsCompleted, Mode=OneWay}"
+                                                                  Click="SubTodoChanged_Click"
                                                                   Margin="0,5,0,0"
                                                                   VerticalAlignment="Top" />
 

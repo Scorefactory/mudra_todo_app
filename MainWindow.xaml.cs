@@ -46,9 +46,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private string _activeFilter = "Open";
     private bool _isLoading;
     private bool _isApplyingSettings;
+    private bool _isSchedulingRecurringTodo;
     private bool _showMemoTrash;
     private bool _isClosing;
     private bool _stickyNoteTopmost = true;
+    private bool _autoStickyNewMemos = true;
     private int _loadingFrame;
     private ScaleTransform? _loadingTongueScale;
     private UIElement? _loadingTongueTip;
@@ -435,6 +437,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             StickyNoteFontSizeSlider.Value = settings.StickyNoteFontSize;
             StickyNoteTopmostToggle.IsChecked = settings.StickyNoteTopmost;
             _stickyNoteTopmost = settings.StickyNoteTopmost;
+            AutoStickyNewMemoToggle.IsChecked = settings.AutoStickyNewMemos;
+            _autoStickyNewMemos = settings.AutoStickyNewMemos;
             AddButtonSize = 16;
             MainSpacingSlider.Value = settings.MainSpacing;
             ListSpacingSlider.Value = settings.SubSpacing;
@@ -477,6 +481,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             MemoFontSizeSlider is null ||
             StickyNoteFontSizeSlider is null ||
             StickyNoteTopmostToggle is null ||
+            AutoStickyNewMemoToggle is null ||
             MainSpacingSlider is null ||
             ListSpacingSlider is null ||
             StickyArrangeDirectionCombo is null)
@@ -494,6 +499,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             MemoFontSize = MemoFontSize,
             StickyNoteFontSize = StickyNoteFontSize,
             StickyNoteTopmost = _stickyNoteTopmost,
+            AutoStickyNewMemos = _autoStickyNewMemos,
             AddButtonSize = 16,
             MainSpacing = MainSpacingSlider?.Value ?? MainItemPadding.Top,
             SubSpacing = ListSpacingSlider?.Value ?? SubRowHeight,
@@ -606,12 +612,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
-        Todos.Insert(0, new TodoItem
+        var entry = new TodoItem
         {
             Title = title,
             IsMemo = isMemo,
+            IsStickyNoteEnabled = isMemo && _autoStickyNewMemos,
             CreatedAt = DateTimeOffset.Now
-        });
+        };
+        Todos.Insert(0, entry);
 
         _activeFilter = isMemo ? "Memo" : "Open";
         if (isMemo)
@@ -625,6 +633,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         RefreshFilter();
         ApplyFilterButtonState();
         StatusText.Text = "저장 중...";
+
+        if (entry.IsMemo && entry.IsStickyNoteEnabled)
+        {
+            ShowStickyNote(entry, focusEditor: false);
+        }
     }
 
     private void DeleteTodo_Click(object sender, RoutedEventArgs e)
@@ -710,14 +723,50 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void TodoChanged_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is CheckBox { DataContext: TodoItem todo, IsChecked: true })
+        if (sender is not CheckBox { DataContext: TodoItem todo } checkBox)
         {
-            ScheduleNextRecurringTodo(todo);
+            return;
+        }
+
+        var isChecked = checkBox.IsChecked == true;
+        todo.IsCompleted = isChecked;
+
+        if (isChecked && IsRecurringTodo(todo))
+        {
+            _isSchedulingRecurringTodo = true;
+            try
+            {
+                ScheduleNextRecurringTodo(todo);
+            }
+            finally
+            {
+                _isSchedulingRecurringTodo = false;
+            }
+        }
+        else if (!isChecked && IsRecurringTodo(todo) && Todos.Contains(todo))
+        {
+            todo.NextActivationDate = null;
+            todo.DueDate ??= GetDueDateForActivation(todo, DateTime.Today);
         }
 
         ScheduleSave();
         UpdateCount();
         RefreshFilter();
+        e.Handled = true;
+    }
+
+    private void SubTodoChanged_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not CheckBox { DataContext: TodoItem subTodo } checkBox)
+        {
+            return;
+        }
+
+        subTodo.IsCompleted = checkBox.IsChecked == true;
+        ScheduleSave();
+        UpdateCount();
+        RefreshFilter();
+        e.Handled = true;
     }
 
     private void ScheduleNextRecurringTodo(TodoItem completedTodo)
@@ -875,19 +924,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         if (todo.NextActivationDate is { } nextActivationDate)
         {
-            var schedule = GetCurrentOrNextSchedule(todo, today);
-            if (schedule.ActivationDate.Date <= today)
+            if (nextActivationDate.Date > today)
             {
-                ActivateRecurringTodo(todo, schedule.ActivationDate, schedule.DueDate);
+                todo.DueDate = null;
                 return;
             }
 
-            if (schedule.ActivationDate.Date != nextActivationDate.Date)
-            {
-                todo.DueDate = null;
-                todo.NextActivationDate = schedule.ActivationDate;
-            }
-
+            ActivateRecurringTodo(todo, nextActivationDate, GetDueDateForActivation(todo, nextActivationDate.Date));
             return;
         }
 
@@ -1004,6 +1047,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             MinWidth = 340,
             MinHeight = 420,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            SizeToContent = SizeToContent.Height,
+            MaxHeight = SystemParameters.WorkArea.Height - 60,
             ResizeMode = ResizeMode.NoResize,
             Topmost = Topmost,
             Background = (Brush)FindResource("AppBackgroundBrush"),
@@ -1018,10 +1063,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         };
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var contentPanel = new StackPanel();
+        var scrollContent = new ScrollViewer
+        {
+            Content = contentPanel,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Padding = new Thickness(0, 0, 6, 0)
+        };
 
         var titleBox = new TextBox
         {
@@ -1033,6 +1083,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             BorderBrush = (Brush)FindResource("LineBrush"),
             CaretBrush = (Brush)FindResource("TextBrush"),
             TextWrapping = TextWrapping.Wrap,
+            AcceptsReturn = true,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            MaxHeight = 96,
             Margin = new Thickness(0, 0, 0, 16),
             ToolTip = "항목 이름 수정"
         };
@@ -1070,6 +1123,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             new[] { "없음", "매일", "매주", "매월" },
             string.IsNullOrWhiteSpace(todo.RepeatOption) ? "없음" : todo.RepeatOption);
         repeatGroup.Margin = new Thickness(0, 0, 0, 12);
+        StackPanel? buttons = null;
 
         var weeklyPanel = new StackPanel
         {
@@ -1132,6 +1186,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 var selectedRepeat = GetSelectedOption(repeatGroup);
                 weeklyPanel.Visibility = selectedRepeat == "매주" ? Visibility.Visible : Visibility.Collapsed;
                 monthlyPanel.Visibility = selectedRepeat == "매월" ? Visibility.Visible : Visibility.Collapsed;
+                if (buttons is not null)
+                {
+                    FitTodoSettingsDialog(dialog, scrollContent, contentPanel, buttons);
+                }
             };
         }
 
@@ -1142,6 +1200,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 var selectedMode = GetSelectedOption(monthlyModeGroup);
                 monthlyDayPanel.Visibility = selectedMode == "주차요일" ? Visibility.Collapsed : Visibility.Visible;
                 monthlyWeekdayPanel.Visibility = selectedMode == "주차요일" ? Visibility.Visible : Visibility.Collapsed;
+                if (buttons is not null)
+                {
+                    FitTodoSettingsDialog(dialog, scrollContent, contentPanel, buttons);
+                }
             };
         }
 
@@ -1177,7 +1239,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             CaretBrush = (Brush)FindResource("TextBrush")
         };
 
-        var buttons = new StackPanel
+        buttons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right,
@@ -1217,15 +1279,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         buttons.Children.Add(saveButton);
         buttons.Children.Add(cancelButton);
 
-        Grid.SetRow(titleBox, 0);
-        root.Children.Add(titleBox);
+        contentPanel.Children.Add(titleBox);
 
         var duePanel = new StackPanel();
         duePanel.Children.Add(dueLabel);
         duePanel.Children.Add(dueGroup);
         duePanel.Children.Add(dueDateBox);
-        Grid.SetRow(duePanel, 1);
-        root.Children.Add(duePanel);
+        contentPanel.Children.Add(duePanel);
 
         var repeatPanel = new StackPanel();
         repeatPanel.Children.Add(repeatLabel);
@@ -1233,23 +1293,24 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         repeatPanel.Children.Add(weeklyPanel);
         repeatPanel.Children.Add(monthlyPanel);
         repeatPanel.Visibility = isSubTask ? Visibility.Collapsed : Visibility.Visible;
-        Grid.SetRow(repeatPanel, 2);
-        root.Children.Add(repeatPanel);
+        contentPanel.Children.Add(repeatPanel);
 
         pinnedCheck.Visibility = isSubTask ? Visibility.Collapsed : Visibility.Visible;
-        Grid.SetRow(pinnedCheck, 3);
-        root.Children.Add(pinnedCheck);
+        contentPanel.Children.Add(pinnedCheck);
 
         var notePanel = new StackPanel();
         notePanel.Children.Add(noteLabel);
         notePanel.Children.Add(noteBox);
-        Grid.SetRow(notePanel, 4);
-        root.Children.Add(notePanel);
+        contentPanel.Children.Add(notePanel);
 
-        Grid.SetRow(buttons, 5);
+        Grid.SetRow(scrollContent, 0);
+        root.Children.Add(scrollContent);
+
+        Grid.SetRow(buttons, 1);
         root.Children.Add(buttons);
 
         dialog.Content = root;
+        dialog.Loaded += (_, _) => FitTodoSettingsDialog(dialog, scrollContent, contentPanel, buttons);
 
 
         if (dialog.ShowDialog() != true)
@@ -1322,6 +1383,36 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         UpdateCount();
         RefreshFilter();
         ScheduleSave();
+    }
+
+    private static void FitTodoSettingsDialog(
+        Window dialog,
+        ScrollViewer scrollContent,
+        FrameworkElement contentPanel,
+        FrameworkElement buttons)
+    {
+        dialog.Dispatcher.BeginInvoke(() =>
+        {
+            var maxHeight = Math.Max(dialog.MinHeight, SystemParameters.WorkArea.Height - 60);
+            var availableWidth = Math.Max(1, dialog.Width - 54);
+            contentPanel.Measure(new Size(availableWidth, double.PositiveInfinity));
+            buttons.Measure(new Size(availableWidth, double.PositiveInfinity));
+
+            const double chromeAndMargins = 92;
+            var desiredHeight = contentPanel.DesiredSize.Height + buttons.DesiredSize.Height + chromeAndMargins;
+            if (desiredHeight <= maxHeight)
+            {
+                scrollContent.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
+                scrollContent.MaxHeight = double.PositiveInfinity;
+                dialog.MaxHeight = maxHeight;
+                dialog.Height = Math.Max(dialog.MinHeight, desiredHeight);
+                return;
+            }
+
+            scrollContent.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
+            scrollContent.MaxHeight = Math.Max(160, maxHeight - buttons.DesiredSize.Height - chromeAndMargins);
+            dialog.Height = maxHeight;
+        }, DispatcherPriority.Background);
     }
 
     private bool RemoveSubTodo(TodoItem subTodo)
@@ -1646,6 +1737,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             StickyNoteFontSizeSlider.Value = defaults.StickyNoteFontSize;
             StickyNoteTopmostToggle.IsChecked = defaults.StickyNoteTopmost;
             _stickyNoteTopmost = defaults.StickyNoteTopmost;
+            AutoStickyNewMemoToggle.IsChecked = defaults.AutoStickyNewMemos;
+            _autoStickyNewMemos = defaults.AutoStickyNewMemos;
             AddButtonSize = 16;
             MainSpacingSlider.Value = defaults.MainSpacing;
             ListSpacingSlider.Value = defaults.SubSpacing;
@@ -1748,6 +1841,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             stickyWindow.Topmost = _stickyNoteTopmost;
         }
 
+        SaveAppSettings();
+    }
+
+    private void AutoStickyNewMemoToggle_Changed(object sender, RoutedEventArgs e)
+    {
+        _autoStickyNewMemos = AutoStickyNewMemoToggle.IsChecked == true;
         SaveAppSettings();
     }
 
@@ -1921,6 +2020,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         if (e.PropertyName is nameof(TodoItem.SubTaskDraft) or nameof(TodoItem.IsAddingSubTask))
         {
+            return;
+        }
+
+        if (sender is TodoItem todo &&
+            IsRecurringTodo(todo) &&
+            (_isSchedulingRecurringTodo || e.PropertyName == nameof(TodoItem.IsCompleted)))
+        {
+            ScheduleSave();
             return;
         }
 

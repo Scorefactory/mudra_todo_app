@@ -18,6 +18,8 @@ public sealed class AppSettings
 
     public bool StickyNoteTopmost { get; set; } = true;
 
+    public bool AutoStickyNewMemos { get; set; } = true;
+
     public double AddButtonSize { get; set; } = 16;
 
     public double MainSpacing { get; set; } = 3;
