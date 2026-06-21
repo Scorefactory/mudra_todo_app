@@ -370,6 +370,7 @@
                               SelectionChanged="ThemeCombo_SelectionChanged">
                         <ComboBoxItem Content="기본" IsSelected="True" />
                         <ComboBoxItem Content="Dark 2026" />
+                        <ComboBoxItem Content="Signal Grove" />
                     </ComboBox>
 
                     <TextBlock Grid.Row="1"

@@ -1934,6 +1934,26 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
+        if (theme == "Signal Grove")
+        {
+            SetBrush("AppBackgroundBrush", "#10130F");
+            SetBrush("PanelBrush", "#171C16");
+            SetBrush("PanelSoftBrush", "#202820");
+            SetBrush("InputBrush", "#1C241F");
+            SetBrush("LineBrush", "#2C382F");
+            SetBrush("TextBrush", "#F2F5E9");
+            SetBrush("TodoTextBrush", "#F6F1DF");
+            SetBrush("SubTodoTextBrush", "#B8DCCF");
+            SetBrush("CompletedTextBrush", "#819087");
+            SetBrush("TextMutedBrush", "#A4B2A8");
+            SetBrush("AccentBrush", "#8BD3C7");
+            SetBrush("DangerBrush", "#FF8A8A");
+            SetBrush("CheckBrush", "#A6E75C");
+            ApplyTitleBarTheme(this);
+            ApplyStickyWindowsTheme();
+            return;
+        }
+
         SetBrush("AppBackgroundBrush", "#101114");
         SetBrush("PanelBrush", "#181A1F");
         SetBrush("PanelSoftBrush", "#20232B");
@@ -3352,9 +3372,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         var isDark = 1;
         _ = DwmSetWindowAttribute(handle, DwmWindowAttribute.UseImmersiveDarkMode, ref isDark, sizeof(int));
 
-        var caption = ToColorRef(_currentTheme == "Dark 2026" ? "#181818" : "#101114");
-        var text = ToColorRef(_currentTheme == "Dark 2026" ? "#CCCCCC" : "#F3F6FA");
-        var border = ToColorRef(_currentTheme == "Dark 2026" ? "#2B2B2B" : "#262A33");
+        var (captionHex, textHex, borderHex) = _currentTheme switch
+        {
+            "Dark 2026" => ("#181818", "#CCCCCC", "#2B2B2B"),
+            "Signal Grove" => ("#171C16", "#F2F5E9", "#2C382F"),
+            _ => ("#101114", "#F3F6FA", "#262A33")
+        };
+
+        var caption = ToColorRef(captionHex);
+        var text = ToColorRef(textHex);
+        var border = ToColorRef(borderHex);
 
         _ = DwmSetWindowAttribute(handle, DwmWindowAttribute.CaptionColor, ref caption, sizeof(int));
         _ = DwmSetWindowAttribute(handle, DwmWindowAttribute.TextColor, ref text, sizeof(int));
