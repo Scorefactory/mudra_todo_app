@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -43,6 +44,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private TodoItem? _draggedSubParent;
     private ContentPresenter? _draggedSubContainer;
     private Window? _dragPreview;
+    private UIElement? _dropHintElement;
+    private DropHintAdorner? _dropHintAdorner;
+    private DropHintMode _dropHintMode = DropHintMode.None;
     private string _activeFilter = "Open";
     private bool _isLoading;
     private bool _isApplyingSettings;
@@ -2681,6 +2685,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
 
         _dragStartPoint = e.GetPosition(null);
+        ClearSubTodoDragState();
         _draggedContainer = FindAncestor<ListBoxItem>((DependencyObject)e.OriginalSource);
         _draggedTodo = _draggedContainer?.DataContext as TodoItem;
     }
@@ -2711,6 +2716,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         finally
         {
             TodoList.GiveFeedback -= Drag_GiveFeedback;
+            ClearDropHint();
             CloseDragPreview();
             draggedContainer.Opacity = 1;
             _draggedContainer = null;
@@ -2718,34 +2724,24 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
+    private void TodoList_DragOver(object sender, DragEventArgs e)
+    {
+        var plan = BuildMainDropPlan(e);
+        ShowDropPlanHint(plan);
+        e.Effects = plan?.IsValid == true ? DragDropEffects.Move : DragDropEffects.None;
+        e.Handled = true;
+    }
+
     private void TodoList_Drop(object sender, DragEventArgs e)
     {
-        if (!e.Data.GetDataPresent(typeof(TodoItem)))
+        var plan = BuildMainDropPlan(e);
+        ClearDropHint();
+        if (ApplyDropPlan(plan))
         {
-            return;
+            StatusText.Text = "저장 중...";
         }
 
-        var sourceTodo = (TodoItem)e.Data.GetData(typeof(TodoItem))!;
-        var targetTodo = FindAncestor<ListBoxItem>((DependencyObject)e.OriginalSource)?.DataContext as TodoItem;
-        if (targetTodo is null || ReferenceEquals(sourceTodo, targetTodo))
-        {
-            return;
-        }
-
-        if (sourceTodo.IsPinned != targetTodo.IsPinned)
-        {
-            return;
-        }
-
-        var sourceIndex = Todos.IndexOf(sourceTodo);
-        var targetIndex = Todos.IndexOf(targetTodo);
-        if (sourceIndex < 0 || targetIndex < 0)
-        {
-            return;
-        }
-
-        Todos.Move(sourceIndex, targetIndex);
-        StatusText.Text = "저장 중...";
+        e.Handled = true;
     }
 
     private void SubTodoList_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -2757,6 +2753,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
 
         _dragStartPoint = e.GetPosition(null);
+        ClearTodoDragState();
         _draggedSubParent = (sender as FrameworkElement)?.DataContext as TodoItem;
         _draggedSubContainer = FindAncestor<ContentPresenter>((DependencyObject)e.OriginalSource);
         _draggedSubTodo = _draggedSubContainer?.Content as TodoItem;
@@ -2800,6 +2797,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         finally
         {
             ((ItemsControl)sender).GiveFeedback -= Drag_GiveFeedback;
+            ClearDropHint();
             CloseDragPreview();
             _draggedSubContainer.Opacity = 1;
             _draggedSubContainer = null;
@@ -2808,29 +2806,438 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
+    private void SubTodoList_DragOver(object sender, DragEventArgs e)
+    {
+        var plan = BuildSubDropPlan(sender, e);
+        ShowDropPlanHint(plan);
+        e.Effects = plan?.IsValid == true ? DragDropEffects.Move : DragDropEffects.None;
+        e.Handled = true;
+    }
+
     private void SubTodoList_Drop(object sender, DragEventArgs e)
     {
-        if (!e.Data.GetDataPresent(typeof(TodoItem)) || (sender as FrameworkElement)?.DataContext is not TodoItem parent)
+        var plan = BuildSubDropPlan(sender, e);
+        ClearDropHint();
+        if (ApplyDropPlan(plan))
+        {
+            StatusText.Text = "저장 중...";
+        }
+
+        e.Handled = true;
+    }
+
+    private void DragSurface_DragLeave(object sender, DragEventArgs e)
+    {
+        if (sender is UIElement element && !element.IsMouseOver)
+        {
+            ClearDropHint();
+        }
+    }
+
+    private TodoDropPlan? BuildMainDropPlan(DragEventArgs e)
+    {
+        if (!TryGetDraggedTodo(e, out var source, out var sourceKind, out var sourceParent))
+        {
+            return null;
+        }
+
+        var targetElement = FindAncestor<ListBoxItem>((DependencyObject)e.OriginalSource);
+        if (targetElement?.DataContext is not TodoItem target)
+        {
+            return null;
+        }
+
+        var placement = GetMainDropPlacement(e.GetPosition(targetElement), targetElement.ActualHeight);
+        if (placement == DropPlacement.Into)
+        {
+            var isValid = CanDropIntoMainTarget(source, sourceKind, sourceParent, target);
+            return CreateDropPlan(
+                source,
+                target,
+                targetElement,
+                placement,
+                DropDestinationKind.SubTasks,
+                target,
+                isValid);
+        }
+
+        return CreateDropPlan(
+            source,
+            target,
+            targetElement,
+            placement,
+            DropDestinationKind.Root,
+            destinationParent: null,
+            CanDropAtRoot(source, sourceKind, target));
+    }
+
+    private TodoDropPlan? BuildSubDropPlan(object sender, DragEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: TodoItem parent } ||
+            !TryGetDraggedTodo(e, out var source, out var sourceKind, out var sourceParent))
+        {
+            return null;
+        }
+
+        var targetElement = FindAncestor<ContentPresenter>((DependencyObject)e.OriginalSource);
+        if (targetElement?.Content is not TodoItem target)
+        {
+            return null;
+        }
+
+        var placement = GetSubDropPlacement(e.GetPosition(targetElement), targetElement.ActualHeight);
+        return CreateDropPlan(
+            source,
+            target,
+            targetElement,
+            placement,
+            DropDestinationKind.SubTasks,
+            parent,
+            CanDropIntoSubList(source, sourceKind, sourceParent, parent, target));
+    }
+
+    private TodoDropPlan CreateDropPlan(
+        TodoItem source,
+        TodoItem target,
+        FrameworkElement targetElement,
+        DropPlacement placement,
+        DropDestinationKind destinationKind,
+        TodoItem? destinationParent,
+        bool isValid)
+    {
+        return new TodoDropPlan
+        {
+            Source = source,
+            Target = target,
+            TargetElement = targetElement,
+            Placement = placement,
+            DestinationKind = destinationKind,
+            DestinationParent = destinationParent,
+            IsValid = isValid,
+            HintMode = isValid ? GetDropHintMode(placement) : DropHintMode.Invalid
+        };
+    }
+
+    private bool TryGetDraggedTodo(DragEventArgs e, out TodoItem source, out DragSourceKind sourceKind, out TodoItem? sourceParent)
+    {
+        if (_draggedSubTodo is not null)
+        {
+            source = _draggedSubTodo;
+            sourceKind = DragSourceKind.Sub;
+            sourceParent = _draggedSubParent ?? FindParentTodo(source);
+            return sourceParent is not null;
+        }
+
+        if (_draggedTodo is not null)
+        {
+            source = _draggedTodo;
+            sourceKind = DragSourceKind.Main;
+            sourceParent = null;
+            return Todos.Contains(source);
+        }
+
+        if (e.Data.GetDataPresent(typeof(TodoItem)) &&
+            e.Data.GetData(typeof(TodoItem)) is TodoItem fallback)
+        {
+            source = fallback;
+            if (Todos.Contains(source))
+            {
+                sourceKind = DragSourceKind.Main;
+                sourceParent = null;
+                return true;
+            }
+
+            sourceParent = FindParentTodo(source);
+            sourceKind = sourceParent is null ? DragSourceKind.None : DragSourceKind.Sub;
+            return sourceParent is not null;
+        }
+
+        source = null!;
+        sourceKind = DragSourceKind.None;
+        sourceParent = null;
+        return false;
+    }
+
+    private static DropPlacement GetMainDropPlacement(Point position, double targetHeight)
+    {
+        var height = Math.Max(1, targetHeight);
+        if (position.Y < height * 0.25)
+        {
+            return DropPlacement.Before;
+        }
+
+        return position.Y > height * 0.75 ? DropPlacement.After : DropPlacement.Into;
+    }
+
+    private static DropPlacement GetSubDropPlacement(Point position, double targetHeight)
+    {
+        return position.Y < Math.Max(1, targetHeight) / 2
+            ? DropPlacement.Before
+            : DropPlacement.After;
+    }
+
+    private static DropHintMode GetDropHintMode(DropPlacement placement)
+    {
+        return placement switch
+        {
+            DropPlacement.Before => DropHintMode.InsertBefore,
+            DropPlacement.After => DropHintMode.InsertAfter,
+            DropPlacement.Into => DropHintMode.Into,
+            _ => DropHintMode.None
+        };
+    }
+
+    private bool CanDropAtRoot(TodoItem source, DragSourceKind sourceKind, TodoItem target)
+    {
+        if (ReferenceEquals(source, target) || !Todos.Contains(target))
+        {
+            return false;
+        }
+
+        if (sourceKind == DragSourceKind.Main)
+        {
+            return source.IsPinned == target.IsPinned &&
+                   source.IsMemo == target.IsMemo &&
+                   source.IsDeleted == target.IsDeleted;
+        }
+
+        return sourceKind == DragSourceKind.Sub &&
+               !source.IsMemo &&
+               !source.IsDeleted &&
+               !target.IsMemo &&
+               !target.IsDeleted;
+    }
+
+    private static bool CanDropIntoMainTarget(
+        TodoItem source,
+        DragSourceKind sourceKind,
+        TodoItem? sourceParent,
+        TodoItem target)
+    {
+        return !ReferenceEquals(source, target) &&
+               !ReferenceEquals(sourceParent, target) &&
+               sourceKind is DragSourceKind.Main or DragSourceKind.Sub &&
+               CanBecomeSubItem(source) &&
+               CanAcceptNewSubItem(target);
+    }
+
+    private static bool CanDropIntoSubList(
+        TodoItem source,
+        DragSourceKind sourceKind,
+        TodoItem? sourceParent,
+        TodoItem parent,
+        TodoItem target)
+    {
+        if (ReferenceEquals(source, parent) || ReferenceEquals(source, target) || parent.IsMemo || parent.IsDeleted)
+        {
+            return false;
+        }
+
+        if (parent.IsCompleted && !ReferenceEquals(sourceParent, parent))
+        {
+            return false;
+        }
+
+        return sourceKind switch
+        {
+            DragSourceKind.Main => CanBecomeSubItem(source),
+            DragSourceKind.Sub => !source.IsMemo && !source.IsDeleted,
+            _ => false
+        };
+    }
+
+    private static bool CanBecomeSubItem(TodoItem source)
+    {
+        return !source.IsMemo &&
+               !source.IsDeleted &&
+               source.SubTasks.Count == 0 &&
+               !IsRecurringTodo(source);
+    }
+
+    private static bool CanAcceptNewSubItem(TodoItem target)
+    {
+        return !target.IsMemo && !target.IsDeleted && !target.IsCompleted;
+    }
+
+    private bool ApplyDropPlan(TodoDropPlan? plan)
+    {
+        if (plan?.IsValid != true)
+        {
+            return false;
+        }
+
+        return plan.DestinationKind switch
+        {
+            DropDestinationKind.Root => MoveToRoot(plan.Source, plan.Target, plan.Placement),
+            DropDestinationKind.SubTasks when plan.DestinationParent is not null =>
+                MoveToSubTasks(plan.Source, plan.DestinationParent, plan.Target, plan.Placement),
+            _ => false
+        };
+    }
+
+    private bool MoveToRoot(TodoItem source, TodoItem target, DropPlacement placement)
+    {
+        var targetIndex = Todos.IndexOf(target);
+        if (targetIndex < 0)
+        {
+            return false;
+        }
+
+        var insertIndex = placement == DropPlacement.After ? targetIndex + 1 : targetIndex;
+        return MoveToCollection(source, Todos, insertIndex, item => item.IsPinned = target.IsPinned);
+    }
+
+    private bool MoveToSubTasks(TodoItem source, TodoItem destinationParent, TodoItem target, DropPlacement placement)
+    {
+        var destination = destinationParent.SubTasks;
+        var insertIndex = placement == DropPlacement.Into
+            ? destination.Count
+            : destination.IndexOf(target) + (placement == DropPlacement.After ? 1 : 0);
+
+        if (insertIndex < 0)
+        {
+            return false;
+        }
+
+        var moved = MoveToCollection(source, destination, insertIndex, item => item.IsPinned = false);
+        if (moved)
+        {
+            destinationParent.IsSubTasksExpanded = true;
+        }
+
+        return moved;
+    }
+
+    private bool MoveToCollection(
+        TodoItem source,
+        ObservableCollection<TodoItem> destination,
+        int insertIndex,
+        Action<TodoItem>? beforeInsert)
+    {
+        var sourceCollection = GetContainingCollection(source);
+        if (sourceCollection is null)
+        {
+            return false;
+        }
+
+        insertIndex = Math.Clamp(insertIndex, 0, destination.Count);
+        if (ReferenceEquals(sourceCollection, destination))
+        {
+            var sourceIndex = destination.IndexOf(source);
+            if (sourceIndex < 0)
+            {
+                return false;
+            }
+
+            if (sourceIndex < insertIndex)
+            {
+                insertIndex--;
+            }
+
+            if (sourceIndex == insertIndex)
+            {
+                return false;
+            }
+
+            destination.Move(sourceIndex, insertIndex);
+            return true;
+        }
+
+        if (!sourceCollection.Remove(source))
+        {
+            return false;
+        }
+
+        beforeInsert?.Invoke(source);
+        insertIndex = Math.Clamp(insertIndex, 0, destination.Count);
+        destination.Insert(insertIndex, source);
+        return true;
+    }
+
+    private ObservableCollection<TodoItem>? GetContainingCollection(TodoItem item)
+    {
+        if (Todos.Contains(item))
+        {
+            return Todos;
+        }
+
+        return FindParentTodo(item)?.SubTasks;
+    }
+
+    private TodoItem? FindParentTodo(TodoItem child)
+    {
+        return FindParentTodo(Todos, child);
+    }
+
+    private static TodoItem? FindParentTodo(IEnumerable<TodoItem> candidates, TodoItem child)
+    {
+        foreach (var candidate in candidates)
+        {
+            if (candidate.SubTasks.Contains(child))
+            {
+                return candidate;
+            }
+
+            if (FindParentTodo(candidate.SubTasks, child) is { } nestedParent)
+            {
+                return nestedParent;
+            }
+        }
+
+        return null;
+    }
+
+    private void ShowDropPlanHint(TodoDropPlan? plan)
+    {
+        if (plan is null || plan.HintMode == DropHintMode.None)
+        {
+            ClearDropHint();
+            return;
+        }
+
+        ShowDropHint(plan.TargetElement, plan.HintMode);
+    }
+
+    private void ShowDropHint(UIElement target, DropHintMode mode)
+    {
+        if (ReferenceEquals(_dropHintElement, target) &&
+            _dropHintAdorner is not null &&
+            _dropHintMode == mode)
+        {
+            _dropHintAdorner.InvalidateVisual();
+            return;
+        }
+
+        ClearDropHint();
+
+        var layer = AdornerLayer.GetAdornerLayer(target);
+        if (layer is null)
         {
             return;
         }
 
-        var sourceTodo = (TodoItem)e.Data.GetData(typeof(TodoItem))!;
-        var targetTodo = FindAncestor<ContentPresenter>((DependencyObject)e.OriginalSource)?.Content as TodoItem;
-        if (targetTodo is null || ReferenceEquals(sourceTodo, targetTodo) || !ReferenceEquals(parent, _draggedSubParent))
+        _dropHintMode = mode;
+        _dropHintElement = target;
+        _dropHintAdorner = new DropHintAdorner(
+            target,
+            mode,
+            TryFindResource("AccentBrush") as Brush ?? Brushes.DodgerBlue,
+            TryFindResource("DangerBrush") as Brush ?? Brushes.IndianRed);
+        layer.Add(_dropHintAdorner);
+    }
+
+    private void ClearDropHint()
+    {
+        if (_dropHintElement is not null &&
+            _dropHintAdorner is not null &&
+            AdornerLayer.GetAdornerLayer(_dropHintElement) is { } layer)
         {
-            return;
+            layer.Remove(_dropHintAdorner);
         }
 
-        var sourceIndex = parent.SubTasks.IndexOf(sourceTodo);
-        var targetIndex = parent.SubTasks.IndexOf(targetTodo);
-        if (sourceIndex < 0 || targetIndex < 0)
-        {
-            return;
-        }
-
-        parent.SubTasks.Move(sourceIndex, targetIndex);
-        StatusText.Text = "저장 중...";
+        _dropHintElement = null;
+        _dropHintAdorner = null;
+        _dropHintMode = DropHintMode.None;
     }
 
     private static bool IsInteractiveElement(DependencyObject current)
@@ -2981,6 +3388,131 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         BorderColor = 34,
         CaptionColor = 35,
         TextColor = 36
+    }
+
+    private enum DragSourceKind
+    {
+        None,
+        Main,
+        Sub
+    }
+
+    private enum DropPlacement
+    {
+        None,
+        Before,
+        After,
+        Into
+    }
+
+    private enum DropDestinationKind
+    {
+        Root,
+        SubTasks
+    }
+
+    private enum DropHintMode
+    {
+        None,
+        InsertBefore,
+        InsertAfter,
+        Into,
+        Invalid
+    }
+
+    private sealed class TodoDropPlan
+    {
+        public bool IsValid { get; init; }
+
+        public TodoItem Source { get; init; } = null!;
+
+        public TodoItem Target { get; init; } = null!;
+
+        public FrameworkElement TargetElement { get; init; } = null!;
+
+        public DropPlacement Placement { get; init; }
+
+        public DropDestinationKind DestinationKind { get; init; }
+
+        public TodoItem? DestinationParent { get; init; }
+
+        public DropHintMode HintMode { get; init; }
+    }
+
+    private sealed class DropHintAdorner : Adorner
+    {
+        private readonly DropHintMode _mode;
+        private readonly Brush _accentBrush;
+        private readonly Brush _dangerBrush;
+
+        public DropHintAdorner(UIElement adornedElement, DropHintMode mode, Brush accentBrush, Brush dangerBrush)
+            : base(adornedElement)
+        {
+            _mode = mode;
+            _accentBrush = accentBrush.CloneCurrentValue();
+            _dangerBrush = dangerBrush.CloneCurrentValue();
+            IsHitTestVisible = false;
+        }
+
+        protected override void OnRender(DrawingContext drawingContext)
+        {
+            var width = Math.Max(0, AdornedElement.RenderSize.Width);
+            var height = Math.Max(0, AdornedElement.RenderSize.Height);
+            if (width <= 0 || height <= 0)
+            {
+                return;
+            }
+
+            switch (_mode)
+            {
+                case DropHintMode.InsertBefore:
+                    DrawInsertionLine(drawingContext, width, 1);
+                    break;
+                case DropHintMode.InsertAfter:
+                    DrawInsertionLine(drawingContext, width, height - 1);
+                    break;
+                case DropHintMode.Into:
+                    DrawTargetHighlight(drawingContext, width, height, _accentBrush, 0.14, dashStyle: null);
+                    break;
+                case DropHintMode.Invalid:
+                    DrawTargetHighlight(drawingContext, width, height, _dangerBrush, 0.10, DashStyles.Dash);
+                    break;
+            }
+        }
+
+        private void DrawInsertionLine(DrawingContext drawingContext, double width, double y)
+        {
+            var pen = new Pen(_accentBrush, 2)
+            {
+                StartLineCap = PenLineCap.Round,
+                EndLineCap = PenLineCap.Round
+            };
+            drawingContext.DrawLine(pen, new Point(0, y), new Point(width, y));
+            drawingContext.DrawEllipse(_accentBrush, null, new Point(5, y), 3, 3);
+        }
+
+        private static void DrawTargetHighlight(
+            DrawingContext drawingContext,
+            double width,
+            double height,
+            Brush brush,
+            double fillOpacity,
+            DashStyle? dashStyle)
+        {
+            var fill = brush.CloneCurrentValue();
+            fill.Opacity = fillOpacity;
+
+            var penBrush = brush.CloneCurrentValue();
+            penBrush.Opacity = 0.9;
+            var pen = new Pen(penBrush, 1.4);
+            if (dashStyle is not null)
+            {
+                pen.DashStyle = dashStyle;
+            }
+
+            var rect = new Rect(1, 1, Math.Max(0, width - 2), Math.Max(0, height - 2));
+            drawingContext.DrawRoundedRectangle(fill, pen, rect, 8, 8);
+        }
     }
 
     [StructLayout(LayoutKind.Sequential)]

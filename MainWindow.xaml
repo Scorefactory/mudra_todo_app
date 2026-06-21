@@ -798,6 +798,8 @@
                  AllowDrop="True"
                  PreviewMouseLeftButtonDown="TodoList_PreviewMouseLeftButtonDown"
                  MouseMove="TodoList_MouseMove"
+                 DragOver="TodoList_DragOver"
+                 DragLeave="DragSurface_DragLeave"
                  Drop="TodoList_Drop"
                  ItemsSource="{Binding Todos}"
                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
@@ -1134,6 +1136,8 @@
                                               Visibility="{Binding IsSubTasksExpanded, Converter={StaticResource BoolToVisibilityConverter}}"
                                               PreviewMouseLeftButtonDown="SubTodoList_PreviewMouseLeftButtonDown"
                                               MouseMove="SubTodoList_MouseMove"
+                                              DragOver="SubTodoList_DragOver"
+                                              DragLeave="DragSurface_DragLeave"
                                               Drop="SubTodoList_Drop">
                                     <ItemsControl.ItemContainerStyle>
                                         <Style TargetType="ContentPresenter">
