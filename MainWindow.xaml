@@ -10,7 +10,7 @@
         Width="430"
         Height="680"
         MinWidth="360"
-        MinHeight="520"
+        MinHeight="340"
         Background="{DynamicResource AppBackgroundBrush}"
         Foreground="{DynamicResource TextBrush}"
         Topmost="True"
@@ -309,6 +309,25 @@
                                   Unchecked="RightDockToggle_Changed"
                                   Style="{StaticResource DevToggleStyle}"
                                   Content="우측 고정" />
+
+                    <Button x:Name="HeightCycleButton"
+                            Margin="8,0,0,0"
+                            Click="HeightCycleButton_Click"
+                            Foreground="{DynamicResource TextMutedBrush}"
+                            Padding="0"
+                            Style="{StaticResource ShellButtonStyle}"
+                            ToolTip="창 높이 전환">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="↕"
+                                       FontSize="13"
+                                       Margin="0,0,5,0"
+                                       VerticalAlignment="Center" />
+                            <TextBlock x:Name="HeightCycleButtonText"
+                                       Text="반높이"
+                                       FontSize="12"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
 
                 <ToggleButton x:Name="SettingsToggle"

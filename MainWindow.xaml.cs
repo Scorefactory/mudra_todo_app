@@ -25,6 +25,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly AppSettingsService _settings = new();
     private readonly DispatcherTimer _saveTimer;
     private readonly DispatcherTimer _loadingAnimationTimer;
+    private const double DockTopOffset = 100;
     private readonly Dictionary<Guid, Window> _stickyNotes = [];
     private Rect? _rightDockRestoreBounds;
     private double _todoFontSize = 13;
@@ -53,6 +54,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private bool _isSchedulingRecurringTodo;
     private bool _showMemoTrash;
     private bool _isClosing;
+    private bool _isHalfHeightMode;
     private bool _stickyNoteTopmost = true;
     private bool _autoStickyNewMemos = true;
     private int _loadingFrame;
@@ -1694,6 +1696,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void RightDockToggle_Changed(object sender, RoutedEventArgs e)
     {
+        _isHalfHeightMode = false;
+        UpdateHeightCycleButtonText();
+
         if (RightDockToggle.IsChecked == true)
         {
             _rightDockRestoreBounds ??= new Rect(Left, Top, Width, Height);
@@ -1709,11 +1714,56 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void DockToRight()
     {
-        const double topOffset = 100;
         var workArea = SystemParameters.WorkArea;
         Left = workArea.Right - Width;
-        Top = workArea.Top + topOffset;
-        Height = Math.Max(MinHeight, workArea.Height - topOffset);
+        Top = workArea.Top + DockTopOffset;
+        Height = GetRightDockHeight(workArea);
+    }
+
+    private void HeightCycleButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_isHalfHeightMode)
+        {
+            ApplyRightDockHeight();
+            _isHalfHeightMode = false;
+        }
+        else
+        {
+            ApplyHalfHeightKeepingBottom();
+            _isHalfHeightMode = true;
+        }
+
+        UpdateHeightCycleButtonText();
+    }
+
+    private void ApplyHalfHeightKeepingBottom()
+    {
+        var bottom = Top + Height;
+        var targetHeight = Math.Max(MinHeight, GetRightDockHeight(SystemParameters.WorkArea) / 2);
+        Height = targetHeight;
+        Top = bottom - targetHeight;
+    }
+
+    private void ApplyRightDockHeight()
+    {
+        var workArea = SystemParameters.WorkArea;
+        Top = workArea.Top + DockTopOffset;
+        Height = GetRightDockHeight(workArea);
+    }
+
+    private double GetRightDockHeight(Rect workArea)
+    {
+        return Math.Max(MinHeight, workArea.Height - DockTopOffset);
+    }
+
+    private void UpdateHeightCycleButtonText()
+    {
+        if (HeightCycleButtonText is null)
+        {
+            return;
+        }
+
+        HeightCycleButtonText.Text = _isHalfHeightMode ? "긴높이" : "반높이";
     }
 
     private void RestoreFromRightDock()
