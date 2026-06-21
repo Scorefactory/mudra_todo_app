@@ -27,6 +27,7 @@ public sealed class TodoItem : INotifyPropertyChanged
     private bool _isAddingSubTask;
     private bool _isSubTasksExpanded = true;
     private string _subTaskDraft = string.Empty;
+    private DateTimeOffset? _completedAt;
 
     public Guid Id { get; set; } = Guid.NewGuid();
 
@@ -44,7 +45,6 @@ public sealed class TodoItem : INotifyPropertyChanged
             if (SetField(ref _isCompleted, value))
             {
                 CompletedAt = value ? DateTimeOffset.Now : null;
-                OnPropertyChanged(nameof(CompletedAt));
                 NotifyDetailProperties();
             }
         }
@@ -123,7 +123,20 @@ public sealed class TodoItem : INotifyPropertyChanged
             : IsStickyNoteEnabled || IsStickyNoteOpen
                 ? "표시중"
                 : string.Empty;
-    public DateTimeOffset? CompletedAt { get; set; }
+    public DateTimeOffset? CompletedAt
+    {
+        get => _completedAt;
+        set
+        {
+            if (SetField(ref _completedAt, value))
+            {
+                OnPropertyChanged(nameof(CompletedDisplayText));
+                OnPropertyChanged(nameof(CompletedDetailDisplay));
+                OnPropertyChanged(nameof(HasCompletedAt));
+                OnPropertyChanged(nameof(HasDetails));
+            }
+        }
+    }
 
     public DateTimeOffset? DueDate
     {
@@ -136,6 +149,7 @@ public sealed class TodoItem : INotifyPropertyChanged
                 OnPropertyChanged(nameof(NonDueDetailSummary));
                 OnPropertyChanged(nameof(NonDueDetailDisplay));
                 OnPropertyChanged(nameof(DueDisplayText));
+                OnPropertyChanged(nameof(CompletedDetailDisplay));
                 OnPropertyChanged(nameof(HasDetails));
                 OnPropertyChanged(nameof(IsDueToday));
                 OnPropertyChanged(nameof(HasDueDate));
@@ -243,6 +257,7 @@ public sealed class TodoItem : INotifyPropertyChanged
                 OnPropertyChanged(nameof(DetailSummary));
                 OnPropertyChanged(nameof(NonDueDetailSummary));
                 OnPropertyChanged(nameof(NonDueDetailDisplay));
+                OnPropertyChanged(nameof(CompletedDetailDisplay));
                 OnPropertyChanged(nameof(HasDetails));
             }
         }
@@ -287,7 +302,10 @@ public sealed class TodoItem : INotifyPropertyChanged
     }
 
     [JsonIgnore]
-    public bool HasDetails =>
+    public bool HasDetails => HasNonCompletionDetails || HasCompletedAt;
+
+    [JsonIgnore]
+    private bool HasNonCompletionDetails =>
         DueDate is not null ||
         !string.IsNullOrWhiteSpace(Note) ||
         !string.IsNullOrWhiteSpace(RepeatOption) && RepeatOption != "없음";
@@ -358,6 +376,28 @@ public sealed class TodoItem : INotifyPropertyChanged
 
     [JsonIgnore]
     public bool HasDueDate => DueDate is not null;
+
+    [JsonIgnore]
+    public bool HasCompletedAt => IsCompleted && CompletedAt is not null;
+
+    [JsonIgnore]
+    public string CompletedDisplayText => CompletedAt is { } completedAt
+        ? $"완료: {completedAt.LocalDateTime:yyyy.MM.dd HH:mm}"
+        : string.Empty;
+
+    [JsonIgnore]
+    public string CompletedDetailDisplay
+    {
+        get
+        {
+            if (!HasCompletedAt)
+            {
+                return string.Empty;
+            }
+
+            return HasNonCompletionDetails ? $"  ·  {CompletedDisplayText}" : CompletedDisplayText;
+        }
+    }
 
     [JsonIgnore]
     public string DueDisplayText
@@ -468,6 +508,9 @@ public sealed class TodoItem : INotifyPropertyChanged
         OnPropertyChanged(nameof(RepeatReactivateDisplayText));
         OnPropertyChanged(nameof(RepeatReactivateSummary));
         OnPropertyChanged(nameof(IsWaitingForNextRepeat));
+        OnPropertyChanged(nameof(CompletedDisplayText));
+        OnPropertyChanged(nameof(CompletedDetailDisplay));
+        OnPropertyChanged(nameof(HasCompletedAt));
         OnPropertyChanged(nameof(HasDetails));
     }
 

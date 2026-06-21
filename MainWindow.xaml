@@ -919,9 +919,20 @@
                                             MinWidth="{Binding AddButtonSize, RelativeSource={RelativeSource AncestorType=Window}}"
                                             Width="{Binding AddButtonSize, RelativeSource={RelativeSource AncestorType=Window}}"
                                             Height="{Binding AddButtonSize, RelativeSource={RelativeSource AncestorType=Window}}"
-                                            FontSize="12"
-                                            Visibility="{Binding IsMemo, Converter={StaticResource InverseBoolToVisibilityConverter}}"
-                                            Style="{StaticResource ShellButtonStyle}">
+                                            FontSize="12">
+                                        <Button.Style>
+                                            <Style TargetType="Button" BasedOn="{StaticResource ShellButtonStyle}">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsMemo}" Value="True">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsCompleted}" Value="True">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
                                         <Path Data="M 8 3 L 8 13 M 3 8 L 13 8"
                                               Stroke="{DynamicResource AccentBrush}"
                                               StrokeThickness="1.8"
@@ -976,6 +987,12 @@
                                                Foreground="{DynamicResource TextMutedBrush}"
                                                FontSize="12"
                                                TextWrapping="Wrap" />
+
+                                    <TextBlock Text="{Binding CompletedDetailDisplay}"
+                                               Foreground="{DynamicResource TextMutedBrush}"
+                                               FontSize="12"
+                                               TextWrapping="Wrap"
+                                               Visibility="{Binding HasCompletedAt, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                                 </WrapPanel>
 
@@ -1053,8 +1070,21 @@
                                         BorderThickness="1"
                                         CornerRadius="18"
                                         Padding="12"
-                                        Margin="28,6,0,8"
-                                        Visibility="{Binding IsAddingSubTask, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        Margin="28,6,0,8">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <MultiDataTrigger>
+                                                    <MultiDataTrigger.Conditions>
+                                                        <Condition Binding="{Binding IsAddingSubTask}" Value="True" />
+                                                        <Condition Binding="{Binding IsCompleted}" Value="False" />
+                                                    </MultiDataTrigger.Conditions>
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </MultiDataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />

@@ -652,7 +652,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void ShowSubTodoInput_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not Button { Tag: TodoItem parent })
+        if (sender is not Button { Tag: TodoItem parent } || parent.IsCompleted)
         {
             return;
         }
@@ -702,6 +702,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void AddSubTodo(TodoItem parent)
     {
+        if (parent.IsCompleted)
+        {
+            parent.SubTaskDraft = string.Empty;
+            parent.IsAddingSubTask = false;
+            return;
+        }
+
         var title = parent.SubTaskDraft;
         if (string.IsNullOrWhiteSpace(title))
         {
@@ -730,6 +737,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         var isChecked = checkBox.IsChecked == true;
         todo.IsCompleted = isChecked;
+        if (isChecked)
+        {
+            todo.SubTaskDraft = string.Empty;
+            todo.IsAddingSubTask = false;
+        }
 
         if (isChecked && IsRecurringTodo(todo))
         {
