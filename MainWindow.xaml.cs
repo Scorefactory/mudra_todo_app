@@ -1954,6 +1954,46 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             return;
         }
 
+        if (theme == "Neon Harbor")
+        {
+            SetBrush("AppBackgroundBrush", "#0F1115");
+            SetBrush("PanelBrush", "#171A22");
+            SetBrush("PanelSoftBrush", "#202633");
+            SetBrush("InputBrush", "#19222A");
+            SetBrush("LineBrush", "#303948");
+            SetBrush("TextBrush", "#F3F7FF");
+            SetBrush("TodoTextBrush", "#F9F5FF");
+            SetBrush("SubTodoTextBrush", "#B8E7FF");
+            SetBrush("CompletedTextBrush", "#858D9A");
+            SetBrush("TextMutedBrush", "#A7B1C0");
+            SetBrush("AccentBrush", "#63E6FF");
+            SetBrush("DangerBrush", "#FF7AA2");
+            SetBrush("CheckBrush", "#B5F36D");
+            ApplyTitleBarTheme(this);
+            ApplyStickyWindowsTheme();
+            return;
+        }
+
+        if (theme == "Rose Circuit")
+        {
+            SetBrush("AppBackgroundBrush", "#140F12");
+            SetBrush("PanelBrush", "#1E171B");
+            SetBrush("PanelSoftBrush", "#2A2027");
+            SetBrush("InputBrush", "#241B21");
+            SetBrush("LineBrush", "#3A2C34");
+            SetBrush("TextBrush", "#FFF1F6");
+            SetBrush("TodoTextBrush", "#FFF3E0");
+            SetBrush("SubTodoTextBrush", "#D8C8FF");
+            SetBrush("CompletedTextBrush", "#97868F");
+            SetBrush("TextMutedBrush", "#BAA7B1");
+            SetBrush("AccentBrush", "#F6C85F");
+            SetBrush("DangerBrush", "#FF7A8A");
+            SetBrush("CheckBrush", "#8EE6A8");
+            ApplyTitleBarTheme(this);
+            ApplyStickyWindowsTheme();
+            return;
+        }
+
         SetBrush("AppBackgroundBrush", "#101114");
         SetBrush("PanelBrush", "#181A1F");
         SetBrush("PanelSoftBrush", "#20232B");
@@ -3376,6 +3416,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             "Dark 2026" => ("#181818", "#CCCCCC", "#2B2B2B"),
             "Signal Grove" => ("#171C16", "#F2F5E9", "#2C382F"),
+            "Neon Harbor" => ("#171A22", "#F3F7FF", "#303948"),
+            "Rose Circuit" => ("#1E171B", "#FFF1F6", "#3A2C34"),
             _ => ("#101114", "#F3F6FA", "#262A33")
         };
 
